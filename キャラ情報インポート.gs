@@ -1,21 +1,25 @@
 function importChara() {
-  var sheet = SpreadsheetApp.getActive().getSheetByName('List');
+  var sheet = SpreadsheetApp.getActive().getSheetByName('Chara');
   var sheetData = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
   var topMargin = 2;
   var charaNameCol = 1;
-  var eveOrderCol = 2;
-  var specialtyCol = 3;
-  var gSkillCol = 4;
-  var pSkillCol = 5;
-  var fSkillCol = 6;
-  var comboCol = 7;
+  var eveOrderCol = charaNameCol + 1;
+  var roleCol = eveOrderCol + 1;
+  var mantleCol = roleCol + 1;
+  var evilCol = mantleCol + 1;
+  var specialtyCol = evilCol + 1;
+  var gSkillCol = specialtyCol + 1;
+  var pSkillCol = gSkillCol + 1;
+  var fSkillCol = pSkillCol + 1;
+  var comboCol = fSkillCol + 1;
+  var urlCol = comboCol + 1;
   var listUrl = 'https://xn--odkm0eg.gamewith.jp/article/show/148127';
   var listHtml = UrlFetchApp.fetch(listUrl).getContentText('UTF-8')
   var charaNames = [];
   
   for(var i = topMargin + 1; i <= sheetData.length; i++){
     if(getData(i, 2) == ""){
-      charaNames.push([getData(i, 1), i]);
+      charaNames.push([getData(i, 1).replace("[", "\\[").replace("]", "\\]"), i]);
     }
   }
   
@@ -51,10 +55,12 @@ function importChara() {
       var detailPath = sectionHtmls[0].match(/\/article\/show\/[0-9]*/);
 //      var detailPath = ['/article/show/19461']; //開発用データ
       
-      if(detailPath[0]){
+      if(detailPath){
         var detailUrl = detailPath[0].replace('/article/show/','https://パワプロ.gamewith.jp/article/show/');
         var detailHtml = UrlFetchApp.fetch(detailUrl).getContentText('UTF-8');
         
+        //URL
+        setData(value[1], urlCol, detailUrl);
         
         //名前
         var charaName = getTags(detailHtml, 'h3', '', '基本情報')[0].replace(/の基本情報/, '');
@@ -64,15 +70,29 @@ function importChara() {
         //基本情報テーブル
         var baseInfo = getChildTags(detailHtml, [['div', '<div class="pwpr_status_table">', '', 0], ['tr', '', '']]);
         
+        //イベ順
+        var eveOrder = getTags(baseInfo[2], 'span', '', '')[0];
+        setData(value[1], eveOrderCol, eveOrder);
+        
+        
+        //役割
+        var role = baseInfo[1].match(/alt=".*?"/)[0];
+        
+        if(role.match("ガード")){
+          role = "ガード\n(筋力)"
+        }else if(role.match("バウンサー")){
+          role = "バウンサー\n(技術)"
+        }else if(role.match("レンジャー")){
+          role = "レンジャー\n(敏捷/変化)"
+        }else if(role.match("スナイパー")){
+          role = "スナイパー\n(精神)"
+        }
+        setData(value[1], roleCol, role);
+        
         
         //得意練習
         var specialty = getTags(baseInfo[0], 'td', '', '')[0].replace('&', '\n');
         setData(value[1], specialtyCol, specialty);
-        
-        
-        //イベ順
-        var eveOrder = getTags(baseInfo[2], 'span', '', '')[0];
-        setData(value[1], eveOrderCol, eveOrder);
         
         
         //金特
@@ -92,12 +112,16 @@ function importChara() {
         var combo = ''
         var comboHtmls = baseInfo[6].match(/<\/noscript>.*?<\/a>/g);
         
-        comboHtmls.forEach(function(value, index, array){
-          combo += value.replace(/<\/.*?>/g, '');
-          if(index < array.length - 1){
-            combo += '\n';
-          }
-        });
+        if(comboHtmls){
+          comboHtmls.forEach(function(value, index, array){
+            combo += value.replace(/<\/.*?>/g, '');
+            if(index < array.length - 1){
+              combo += '\n';
+            }
+          });
+        }else{
+          combo = '-';
+        }
         setData(value[1], comboCol, combo);
         
         
@@ -113,7 +137,7 @@ function importChara() {
             }
           });
         }else{
-          pSkill = 'なし';
+          pSkill = '-';
         }
         setData(value[1], pSkillCol, pSkill);
         
@@ -130,9 +154,23 @@ function importChara() {
             }
           });
         }else{
-          fSkill = 'なし';
+          fSkill = '-';
         }
         setData(value[1], fSkillCol, fSkill);
+        
+        
+        //シナリオ適正
+        var evaluateHtml = getTags(detailHtml, 'div', '<div class="pwpr-loginonly-table">', '')[0];
+        
+        //マントル
+        var mantlevaluate = getChildTags(evaluateHtml, [['td', '', 'マントル', 1], ['span', '', '']])[0].replace('S', 4).replace('A', 3).replace('B', 2).replace('C', 1);
+        setData(value[1], mantleCol, mantlevaluate);
+        
+        //恵比留
+        var evilEvaluate = getChildTags(evaluateHtml, [['td', '', '恵比留', 1], ['span', '', '']])[0].replace('S', 4).replace('A', 3).replace('B', 2).replace('C', 1);
+        setData(value[1], evilCol, evilEvaluate);
+       
+        
         
         //入力 
         sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).setValues(sheetData);
